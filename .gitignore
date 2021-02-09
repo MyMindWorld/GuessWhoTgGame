@@ -1,0 +1,7 @@
+# Project exclude paths
+/target/
+/.idea/
+/botDb.mv.db
+/botDb.trace.db
+GuessWhoTgGame.iml
+*application-local.properties
