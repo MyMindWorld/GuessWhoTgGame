@@ -1,0 +1,24 @@
+version: "3.0"
+
+services:
+
+  bot:
+    image: mmw/guess_who_tg_bot:latest
+    container_name: "guess_who_tg_bot"
+    restart: always
+    depends_on:
+      - postgres_db
+  postgres_db:
+    container_name: "guess_who_db"
+    hostname: postgres
+    image: postgres:latest
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: guess_who
+      POSTGRES_USER: ghuser
+      POSTGRES_PASSWORD: ghpassword
+    volumes:
+      - "ghdbdata:/var/lib/ghpostgresql/data"
+volumes:
+  ghdbdata:

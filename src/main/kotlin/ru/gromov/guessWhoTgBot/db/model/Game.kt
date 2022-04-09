@@ -19,12 +19,15 @@ class Game(
     @GeneratedValue
     var id: Long? = null,
 
+//    @OneToMany(fetch = FetchType.EAGER, mappedBy = "currentGame")
     @OneToMany(
         mappedBy = "currentGame",
+        cascade = [CascadeType.ALL],
+        orphanRemoval = false,
         fetch = FetchType.EAGER
     )
     @EqualsAndHashCode.Exclude
-    var users: List<User> = arrayListOf(),
+    var users: Collection<User> = arrayListOf(),
 
     @Column(name = "joinCode")
     var joinCode: String = UUID.randomUUID().toString(),
@@ -46,11 +49,16 @@ class Game(
         return "Game with id $id and joinCode $joinCode with users total of ${users.size}. Finished - $isFinished"
     }
 
+    fun addUser(user: User) {
+        this.users = this.users.plus(user)
+        user.currentGame = this
+    }
+
     fun isReadyToStart(): Boolean {
         return users.stream().allMatch { user -> user.riddledPerson != "" }
     }
 
-    fun notReadyUsers(): List<User> {
+    fun getNotReadyUsers(): List<User> {
         return users.stream().filter { user -> user.makesRiddleFor!!.riddledPerson == "" }
             .collect(Collectors.toList())
     }

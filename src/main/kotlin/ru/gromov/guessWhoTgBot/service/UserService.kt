@@ -9,6 +9,7 @@ import ru.gromov.guessWhoTgBot.db.model.Game
 import ru.gromov.guessWhoTgBot.db.model.User
 import ru.gromov.guessWhoTgBot.db.repository.UserRepository
 import ru.gromov.guessWhoTgBot.utils.Messages
+import java.util.*
 
 @Service
 class UserService @Autowired constructor(
@@ -19,16 +20,8 @@ class UserService @Autowired constructor(
         userRepository.findByIdEquals(message.from!!.id) ?: createUser(message)
 
 
-    fun findUser(userId: Long, bot: Bot): User =
+    fun findUser(userId: Long): Optional<User> =
         userRepository.findById(userId)
-            .orElseThrow {
-                bot.sendMessage(
-                    chatId = userId,
-                    text = Messages.youNeedToRegister(),
-                    parseMode = ParseMode.MARKDOWN_V2
-                )
-                IllegalStateException("User was not found in db!")
-            }
 
     private fun createUser(message: Message): User {
         return userRepository.save(
@@ -43,7 +36,7 @@ class UserService @Autowired constructor(
     }
 
     fun setCurrentGameForUser(user: User, game: Game) {
-        user.currentGame = game
+        game.addUser(user)
         userRepository.save(user)
     }
 

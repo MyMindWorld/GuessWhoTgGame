@@ -21,7 +21,9 @@ class User(
     @Column(name = "username")
     val username: String = "",
 
-    @ManyToOne(fetch = FetchType.EAGER)
+    @ManyToOne(optional = true, cascade = [CascadeType.ALL],fetch = FetchType.EAGER)
+//    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name="game_id", nullable=true)
     @EqualsAndHashCode.Exclude
     var currentGame: Game? = null,
 

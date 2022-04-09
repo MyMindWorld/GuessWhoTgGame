@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 rm *.jar
-mvn -f ../ clean package || {
+mvn -f ../ clean package -DskipTests || {
   echo "Jar Build failed"
   exit 2
 }
@@ -11,8 +11,5 @@ docker build --build-arg TOKEN=$GUESS_WHO_TG_TOKEN -t mmw/guess_who_tg_bot:lates
   echo "Docker Build failed"
   exit 2
 }
-docker stop guess_who_tg_bot
-docker run --rm --name "guess_who_tg_bot" -d mmw/guess_who_tg_bot:latest || {
-  echo "Run failed"
-  exit 2
-}
+docker-compose down
+docker-compose up -d

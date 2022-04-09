@@ -93,9 +93,7 @@ class MainBotLoop @Autowired constructor(
                         )
                         return@command
                     }
-                    if (gameService.verifyUserIsInGameAndItIsStarted(message.from!!.id)) {
-                        gameService.handleUserRiddleResponse(bot, message.from!!.id, joinedArgs)
-                    }
+                    gameService.handleUserRiddleResponse(bot, message.from!!.id, joinedArgs)
                 }
 
                 text("Leave Game") {

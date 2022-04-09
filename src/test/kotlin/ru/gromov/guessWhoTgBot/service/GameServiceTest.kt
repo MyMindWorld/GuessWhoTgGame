@@ -33,25 +33,20 @@ open class GameServiceTest : BaseServiceTest() {
                     chatId = userAegis.second.id
                 )
             )
-            val marshal = userRepository.save(
-                User(
-                    id = userMarshall.first.id,
-                    name = userMarshall.first.firstName,
-                    chatId = userMarshall.second.id
-                )
-            )
-            val jockey = userRepository.save(
-                User(
-                    id = userJockey.first.id,
-                    name = userJockey.first.firstName,
-                    chatId = userJockey.second.id
-                )
-            )
             createdGame = gameRepository.save(
                 Game(
-                    creator = aegis
+                    creator = aegis,
+                    users = hashSetOf(aegis)
                 )
             )
+            aegis.currentGame = createdGame
+        }
+
+        @Test
+        @Transactional
+        open fun `should have correct game info in DB`() {
+            val game = userRepository.findByIdEquals(userAegis.first.id)!!.currentGame!!
+            assertThat(game.users.size).isEqualTo(1)
         }
 
         @Test
@@ -93,7 +88,7 @@ open class GameServiceTest : BaseServiceTest() {
         private var createdGame: Game = Game()
 
         @BeforeEach
-        open fun createGameForAegisAndJoinByMarshallAndJockey() {
+        fun createGameForAegisAndJoinByMarshallAndJockey() {
             val aegis = userRepository.save(
                 User(
                     id = userAegis.first.id,
@@ -117,7 +112,9 @@ open class GameServiceTest : BaseServiceTest() {
             )
             createdGame = gameRepository.save(
                 Game(
-                    creator = aegis
+                    creator = aegis,
+                    users = hashSetOf(aegis,marshal,jockey),
+                    isStarted = false
                 )
             )
             aegis.currentGame = createdGame
@@ -127,13 +124,15 @@ open class GameServiceTest : BaseServiceTest() {
         }
 
         @Test
-        fun `should have correct game info in DB`() {
-            val game = gameService.findCurrentGameForUser(userAegis.first.id)
-            assertThat(game!!.users.size).isEqualTo(3)
+        @Transactional
+        open fun `should have correct game info in DB`() {
+            val game = userRepository.findByIdEquals(userAegis.first.id)!!.currentGame!!
+            assertThat(game.users.size).isEqualTo(3)
         }
 
         @Test
-        fun `should send correct current game info`() {
+        @Transactional
+        open fun `should send correct current game info`() {
             val gameInDb = gameRepository.findByJoinCodeEquals(createdGame.joinCode)!!
 
             gameService.showCurrentGame(bot, userAegis.first.id)
@@ -152,7 +151,8 @@ open class GameServiceTest : BaseServiceTest() {
         }
 
         @Test
-        fun `should make correct riddler to riddled map`() {
+        @Transactional
+        open fun `should make correct riddler to riddled map`() {
             val gameInDb = gameRepository.findByJoinCodeEquals(createdGame.joinCode)!!
 
             val createdMap = gameService.makeRiddlersMap(gameInDb)
@@ -163,7 +163,8 @@ open class GameServiceTest : BaseServiceTest() {
         }
 
         @Test
-        fun `should make big riddler to riddled map`() {
+        @Transactional
+        open fun `should make big riddler to riddled map`() {
             for (userId in 100L..110L) {
                 userService.findUserOrCreateOne(createMessage(randomUser(userId)))
                 gameService.joinGame(
@@ -195,9 +196,9 @@ open class GameServiceTest : BaseServiceTest() {
             }
 
 
-            assertThat(userService.findUser(userAegis.first.id).makesRiddleFor).isNotNull
-            assertThat(userService.findUser(userMarshall.first.id).makesRiddleFor).isNotNull
-            assertThat(userService.findUser(userJockey.first.id).makesRiddleFor).isNotNull
+            assertThat(userService.findUser(userAegis.first.id).get().makesRiddleFor).isNotNull
+            assertThat(userService.findUser(userMarshall.first.id).get().makesRiddleFor).isNotNull
+            assertThat(userService.findUser(userJockey.first.id).get().makesRiddleFor).isNotNull
         }
     }
 
@@ -242,13 +243,15 @@ open class GameServiceTest : BaseServiceTest() {
         }
 
         @Test
-        fun `should have correct game info in DB`() {
-            val game = gameService.findCurrentGameForUser(userAegis.first.id)
-            assertThat(game!!.users.size).isEqualTo(3)
+        @Transactional
+        open fun `should have correct game info in DB`() {
+            val game = userRepository.findByIdEquals(userAegis.first.id)!!.currentGame!!
+            assertThat(game.users.size).isEqualTo(3)
         }
 
         @Test
-        fun `should send correct current game info`() {
+        @Transactional
+        open fun `should send correct current game info`() {
             val gameInDb = gameRepository.findByJoinCodeEquals(createdGame.joinCode)!!
 
             gameService.showCurrentGame(bot, userAegis.first.id)
@@ -267,7 +270,8 @@ open class GameServiceTest : BaseServiceTest() {
         }
 
         @Test
-        fun `should make correct riddler to riddled map`() {
+        @Transactional
+        open fun `should make correct riddler to riddled map`() {
             val gameInDb = gameRepository.findByJoinCodeEquals(createdGame.joinCode)!!
 
             val createdMap = gameService.makeRiddlersMap(gameInDb)
@@ -278,7 +282,8 @@ open class GameServiceTest : BaseServiceTest() {
         }
 
         @Test
-        fun `should make big riddler to riddled map`() {
+        @Transactional
+        open fun `should make big riddler to riddled map`() {
             for (userId in 100L..110L) {
                 userService.findUserOrCreateOne(createMessage(randomUser(userId)))
                 gameService.joinGame(
@@ -297,7 +302,8 @@ open class GameServiceTest : BaseServiceTest() {
         }
 
         @Test
-        fun `should ask everybody to make a riddle on game start and set makesRiddleFor in DB`() {
+        @Transactional
+        open fun `should ask everybody to make a riddle on game start and set makesRiddleFor in DB`() {
             gameService.startGame(bot, userAegis.first.id)
 
             val gameInDb = gameRepository.findByJoinCodeEquals(createdGame.joinCode)!!
@@ -311,23 +317,24 @@ open class GameServiceTest : BaseServiceTest() {
             }
 
 
-            assertThat(userService.findUser(userAegis.first.id).makesRiddleFor).isNotNull
-            assertThat(userService.findUser(userMarshall.first.id).makesRiddleFor).isNotNull
-            assertThat(userService.findUser(userJockey.first.id).makesRiddleFor).isNotNull
+            assertThat(userService.findUser(userAegis.first.id).get().makesRiddleFor).isNotNull
+            assertThat(userService.findUser(userMarshall.first.id).get().makesRiddleFor).isNotNull
+            assertThat(userService.findUser(userJockey.first.id).get().makesRiddleFor).isNotNull
         }
 
         @Test
-        fun `should correctly process riddles for users`() {
+        @Transactional
+        open fun `should correctly process riddles for users`() {
             gameService.startGame(bot, userAegis.first.id)
 
             val gameInDb = gameRepository.findByJoinCodeEquals(createdGame.joinCode)!!
 
             gameInDb.users.forEach {
-                gameService.handleUserRiddleResponse(bot,it.id!!,it.makesRiddleFor!!.name)
+                gameService.handleUserRiddleResponse(bot, it.id!!, it.makesRiddleFor!!.name)
             }
 
             gameInDb.users.forEach {
-                assertThat(userService.findUser(it.id!!).riddledPerson).isEqualTo(it.name)
+                assertThat(userService.findUser(it.id!!).get().riddledPerson).isEqualTo(it.name)
             }
         }
     }

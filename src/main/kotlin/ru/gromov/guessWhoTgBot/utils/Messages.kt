@@ -10,6 +10,10 @@ class Messages {
     companion object ResponseMessages {
         fun startingGame() = "Starting game, please wait!"
 
+        fun notStarted() = "Not started yet! Please wait."
+
+        fun somethingWentWrong() = "Something went terribly wrong( Try recreating a game"
+
         fun notEnoughPlayers() = "Sadly you cannot play alone("
 
         fun welcomeMessage(user: User) = """
@@ -31,11 +35,16 @@ class Messages {
         fun gameInfo(game: Game) = """
             Join link : `/join ${game.joinCode}`
             Currently in game :""".toValidTgMessage() +
-                "\n" + getUsersFromGame(game)
+                "\n" + getUsersFromGame(game) // todo fix 1 person link (PavelGromov)
 
         fun gameIsNotFoundOrLinkIncorrect() = """
             Game not found
             Ask creator for a correct link""".toValidTgMessage()
+
+        fun gameIsAlreadyStarted() = """
+            Game is already started or finished!
+            Create new one""".toValidTgMessage()
+
 
         fun weAreWaitingFor(game: Game) = """
             Game is about to be started
@@ -63,13 +72,14 @@ class Messages {
             """
             Game is finally starting!
             Here is links between persons and riddles:""".toValidTgMessage() +
-                    "\n" + getRiddleToRiddledPersonWithoutUser(game, excludedUser)
+                    "\n" + getRiddleToRiddledPersonWithoutUser(game, excludedUser) +
+                    "\n" + """If you having trouble with info on riddle, just click it! """.toValidTgMessage()
 
         fun gameEnded(user: User): String =
             """
             Game is finished, we hope you had fun!
             After all you were - """.toValidTgMessage() +
-                    "\n" + getRiddledPersonGoogleLink(user)
+                    getRiddledPersonGoogleLink(user)
 
         fun itsNotYourGameToEnd(creator: User): String =
             """
@@ -100,7 +110,7 @@ class Messages {
                 transform = { it.toString() }).toValidInlineLink()
 
         private fun getNotReadyUsersFromGame(game: Game) =
-            game.notReadyUsers()
+            game.getNotReadyUsers()
                 .stream()
                 .map { it.getMentionLink() }
                 .collect(Collectors.toList())

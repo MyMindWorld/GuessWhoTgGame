@@ -21,8 +21,50 @@ class GameService @Autowired constructor(
     private val gameRepository: GameRepository
 ) {
 
+    private fun generateUsersButton(user: User): KeyboardReplyMarkup {
+        val keyboard: List<List<KeyboardButton>>
+        if (user.currentGame != null) {
+            if (user.currentGame!!.creator == user && !user.currentGame!!.isStarted) {
+                keyboard = listOf(
+                    listOf(KeyboardButton("Current Game")),
+                    listOf(KeyboardButton("Start Game")),
+                    listOf(KeyboardButton("Leave Game"))
+                )
+
+            } else {
+                keyboard = listOf(
+                    listOf(KeyboardButton("Current Game")),
+                    listOf(KeyboardButton("Leave Game"))
+                )
+            }
+
+        } else {
+            keyboard = listOf(
+                listOf(KeyboardButton("Create Game"))
+            )
+        }
+
+        return KeyboardReplyMarkup(
+            keyboard = keyboard,
+            resizeKeyboard = true
+        )
+
+
+    }
+
+    // TODO CHECK SAVES ON EACH ENTITY
+// todo 1. Сказать что ссылка кликабельна
+// todo 3. Фикс баги с ответом кто кто был
+// todo 4.  Добавить текст про конец игры
     fun createGame(bot: Bot, userId: Long): Game {
-        val user = userService.findUser(userId)
+        val user = userService.findUser(userId).orElseThrow {
+            bot.sendMessage(
+                chatId = userId,
+                text = Messages.youNeedToRegister(),
+                parseMode = ParseMode.MARKDOWN_V2
+            )
+            IllegalStateException("User was not found in db!")
+        }
 
         userService.checkUserNotInGame(user, bot)
 
@@ -35,25 +77,22 @@ class GameService @Autowired constructor(
         bot.sendMessage(
             chatId = user.chatId!!,
             text = createdGame(game),
-            parseMode = ParseMode.MARKDOWN_V2
+            parseMode = ParseMode.MARKDOWN_V2,
+            replyMarkup = generateUsersButton(user)
         )
 
         return game
     }
 
-    fun findGameCreatedByUser(userId: Long): Game? {
-        val user = userService.findUser(userId)
-
-        return gameRepository.findByCreatorEquals(user)
-    }
-
-    fun findCurrentGameForUser(userId: Long): Game? {
-        val user = userService.findUser(userId)
-
-        return user.currentGame
-    }
-
     fun joinGame(bot: Bot, userId: Long, joinLink: String): Game {
+        val user = userService.findUser(userId).orElseThrow {
+            bot.sendMessage(
+                chatId = userId,
+                text = Messages.youNeedToRegister(),
+                parseMode = ParseMode.MARKDOWN_V2
+            )
+            IllegalStateException("User ${userId} was not found in db!")
+        }
         val game = gameRepository.findByJoinCodeEquals(joinLink)
 
         if (game == null) {
@@ -62,18 +101,27 @@ class GameService @Autowired constructor(
                 text = Messages.gameIsNotFoundOrLinkIncorrect(),
                 parseMode = ParseMode.MARKDOWN_V2
             )
+            throw IllegalStateException("Game with joinLink ${joinLink} was not found in DB!")
         }
 
-        val user = userService.findUser(userId)
+        if (game.isStarted || game.isFinished) {
+            bot.sendMessage(
+                chatId = userId,
+                text = Messages.gameIsAlreadyStarted(),
+                parseMode = ParseMode.MARKDOWN_V2
+            )
+            throw IllegalStateException("User ${userId} tried to join already started/finished game with joinLink ${joinLink}")
+        }
 
         userService.checkUserNotInGame(user, bot)
 
-        userService.setCurrentGameForUser(user, game!!)
+        userService.setCurrentGameForUser(user, game)
 
         bot.sendMessage(
             chatId = user.chatId!!,
             text = Messages.gameInfo(game),
-            parseMode = ParseMode.MARKDOWN_V2
+            parseMode = ParseMode.MARKDOWN_V2,
+            replyMarkup = generateUsersButton(user)
         )
 
         return game
@@ -83,28 +131,25 @@ class GameService @Autowired constructor(
     fun createUserAndShowMarkup(bot: Bot, message: Message) {
         val user = userService.findUserOrCreateOne(message)
 
-        val keyboardMarkup =
-            KeyboardReplyMarkup(keyboard = generateUsersButton(), resizeKeyboard = true)
 
         bot.sendMessage(
             chatId = user.chatId!!,
             text = Messages.welcomeMessage(user),
             parseMode = ParseMode.MARKDOWN_V2,
-            replyMarkup = keyboardMarkup
-        )
-    }
-
-    fun generateUsersButton(): List<List<KeyboardButton>> {
-        return listOf(
-            listOf(KeyboardButton("Create Game")),
-            listOf(KeyboardButton("Current Game")),
-            listOf(KeyboardButton("Start Game")),
-            listOf(KeyboardButton("Leave Game"))
+            replyMarkup = generateUsersButton(user)
         )
     }
 
     fun showCurrentGame(bot: Bot, userId: Long) {
-        val currentGame = findCurrentGameForUser(userId)
+        val user = userService.findUser(userId).orElseThrow {
+            bot.sendMessage(
+                chatId = userId,
+                text = Messages.youNeedToRegister(),
+                parseMode = ParseMode.MARKDOWN_V2
+            )
+            IllegalStateException("User was not found in db!")
+        }
+        val currentGame = user.currentGame
         if (currentGame != null) {
             bot.sendMessage(
                 chatId = userId,
@@ -122,20 +167,54 @@ class GameService @Autowired constructor(
     }
 
     fun handleUserRiddleResponse(bot: Bot, userId: Long, riddle: String) {
+        val user = userService.findUser(userId).orElseThrow {
+            bot.sendMessage(
+                chatId = userId,
+                text = Messages.youNeedToRegister(),
+                parseMode = ParseMode.MARKDOWN_V2
+            )
+            IllegalStateException("User was not found in db!")
+        }
+        if (user.currentGame == null) {
+            bot.sendMessage(
+                chatId = user.chatId!!,
+                text = Messages.notInGameError(),
+                parseMode = ParseMode.MARKDOWN_V2
+            )
+            return
+        }
+        if (!user.currentGame!!.isStarted) {
+            bot.sendMessage(
+                chatId = user.chatId!!,
+                text = Messages.notStarted(),
+                parseMode = ParseMode.MARKDOWN_V2
+            )
+            return
+        }
+
+        if (user.makesRiddleFor == null) {
+            bot.sendMessage(
+                chatId = user.chatId!!,
+                text = Messages.somethingWentWrong(),
+                parseMode = ParseMode.MARKDOWN_V2
+            )
+            return
+        }
+
         bot.sendMessage(
             chatId = userId,
             text = riddleIsSet(),
             parseMode = ParseMode.MARKDOWN_V2
         )
 
-        userService.setRiddle(userService.findUser(userId).makesRiddleFor!!, riddle)
+        userService.setRiddle(user.makesRiddleFor!!, riddle)
 
-        if (checkGameIsReadyToBeStarted(userId)) {
-            startGameForPlayers(bot, userId)
+        if (user.currentGame!!.isReadyToStart()) {
+            startGameForPlayers(bot, user)
         } else {
             bot.sendMessage(
                 chatId = userId,
-                text = Messages.weAreWaitingFor(findCurrentGameForUser(userId)!!),
+                text = Messages.weAreWaitingFor(user.currentGame!!),
                 parseMode = ParseMode.MARKDOWN_V2
             )
         }
@@ -143,25 +222,38 @@ class GameService @Autowired constructor(
 
     }
 
-    fun verifyUserIsInGameAndItIsStarted(userId: Long): Boolean {
-        return findCurrentGameForUser(userId)!!.isStarted
-    }
-
 
     fun startGame(bot: Bot, userId: Long) {
 
-
-        val gameToBeStarted = findGameCreatedByUser(userId)
+        val user = userService.findUser(userId).orElseThrow {
+            bot.sendMessage(
+                chatId = userId,
+                text = Messages.youNeedToRegister(),
+                parseMode = ParseMode.MARKDOWN_V2
+            )
+            IllegalStateException("User was not found in db!")
+        }
+        var gameToBeStarted = user.currentGame
         if (gameToBeStarted == null) {
             bot.sendMessage(
                 chatId = userId,
                 text = Messages.notInGameError(),
                 parseMode = ParseMode.MARKDOWN_V2
             )
+            return
+        }
+
+        if (gameToBeStarted.isStarted) {
+            bot.sendMessage(
+                chatId = userId,
+                text = Messages.gameIsAlreadyStarted(),
+                parseMode = ParseMode.MARKDOWN_V2
+            )
+            return
         }
 
 
-        if (gameToBeStarted!!.users.size < 2) {
+        if (gameToBeStarted.users.size < 2) {
             bot.sendMessage(
                 chatId = userId,
                 text = Messages.notEnoughPlayers()
@@ -170,20 +262,24 @@ class GameService @Autowired constructor(
         } else {
             bot.sendMessage(
                 chatId = userId,
-                text = Messages.startingGame()
+                text = Messages.startingGame(),
+                replyMarkup = generateUsersButton(user)
             )
         }
 
-        val riddlerToRiddled = makeRiddlersMap(gameToBeStarted)
+        val userToWhoHeRiddlesFor = makeRiddlersMap(gameToBeStarted)
 
         gameToBeStarted.isStarted = true
-        gameRepository.save(gameToBeStarted)
+//        gameToBeStarted = gameRepository.save(gameToBeStarted)
+
+//        val gameUsers = gameToBeStarted.users.toMutableList()
 
         gameToBeStarted.users.forEach {
-            userService.setMakesRiddleFor(it, riddlerToRiddled[it]!!)
+            val userForRiddle = userToWhoHeRiddlesFor[it]!! // todo npe
+            userService.setMakesRiddleFor(it, userForRiddle)
             bot.sendMessage(
                 chatId = it.chatId!!,
-                text = makeRiddleFor(riddlerToRiddled[it]!!),
+                text = makeRiddleFor(userForRiddle),
                 parseMode = ParseMode.MARKDOWN_V2
             )
         }
@@ -206,12 +302,12 @@ class GameService @Autowired constructor(
     }
 
 
-    private fun startGameForPlayers(bot: Bot, userId: Long) {
-        val game = findCurrentGameForUser(userId)
-        game!!.users.forEach { user ->
+    private fun startGameForPlayers(bot: Bot, user: User) {
+        val game = user.currentGame!!
+        game.users.stream().forEach { player ->
             bot.sendMessage(
-                chatId = user.chatId!!,
-                text = Messages.sendRiddledWithoutSelf(game, user),
+                chatId = player.chatId!!,
+                text = Messages.sendRiddledWithoutSelf(game, player),
                 parseMode = ParseMode.MARKDOWN_V2,
                 disableWebPagePreview = true
             )
@@ -220,7 +316,14 @@ class GameService @Autowired constructor(
     }
 
     fun leaveGame(bot: Bot, userId: Long) {
-        val user = userService.findUser(userId)
+        val user = userService.findUser(userId).orElseThrow {
+            bot.sendMessage(
+                chatId = userId,
+                text = Messages.youNeedToRegister(),
+                parseMode = ParseMode.MARKDOWN_V2
+            )
+            IllegalStateException("User was not found in db!")
+        }
         val game = user.currentGame
 
         game?.let {
@@ -229,7 +332,7 @@ class GameService @Autowired constructor(
                 text = Messages.userLeavesGame(),
                 parseMode = ParseMode.MARKDOWN_V2
             )
-            endGameAndDestroy(game, bot, user)
+            endGameAndDestroy(game, bot)
         } ?: run {
             bot.sendMessage(
                 chatId = user.chatId!!,
@@ -242,11 +345,15 @@ class GameService @Autowired constructor(
     }
 
 
-    private fun checkGameIsReadyToBeStarted(userId: Long) =
-        findCurrentGameForUser(userId)!!.isReadyToStart()
-
     fun endGame(bot: Bot, userId: Long) {
-        val user = userService.findUser(userId)
+        val user = userService.findUser(userId).orElseThrow {
+            bot.sendMessage(
+                chatId = userId,
+                text = Messages.youNeedToRegister(),
+                parseMode = ParseMode.MARKDOWN_V2
+            )
+            IllegalStateException("User was not found in db!")
+        }
         user.currentGame?.let {
             if (it.creator != user) {
                 bot.sendMessage(
@@ -255,7 +362,7 @@ class GameService @Autowired constructor(
                     parseMode = ParseMode.MARKDOWN_V2
                 )
             }
-            endGameAndDestroy(it, bot, user)
+            endGameAndDestroy(it, bot)
         } ?: run {
             bot.sendMessage(
                 chatId = user.chatId!!,
@@ -268,19 +375,23 @@ class GameService @Autowired constructor(
 
     private fun endGameAndDestroy(
         game: Game,
-        bot: Bot,
-        user: User
+        bot: Bot
     ) {
         game.isFinished = true
-        game.users.forEach {
+        game.users.forEach { player ->
             bot.sendMessage(
-                chatId = it.chatId!!,
-                text = Messages.gameEnded(user),
+                chatId = player.chatId!!,
+                text = Messages.gameEnded(player),
                 parseMode = ParseMode.MARKDOWN_V2,
-                disableWebPagePreview = true
+                disableWebPagePreview = true,
+                replyMarkup = KeyboardReplyMarkup(
+                    keyboard = listOf(
+                        listOf(KeyboardButton("Create Game"))
+                    ),
+                    resizeKeyboard = true
+                )
             )
-            userService.destroyAllInfoAboutGame(it)
+            userService.destroyAllInfoAboutGame(player)
         }
-        gameRepository.delete(game)
     }
 }
